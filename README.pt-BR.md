@@ -42,10 +42,10 @@
 ### 🐧 Linux (Ubuntu, Xubuntu, Debian, Mint)
 
 #### Opção A: Instalar Pacote `.deb` (Recomendado)
-1. Baixe o pacote **`fakegps-iphone_1.0.1_all.deb`** na aba [Releases](https://github.com/maxxcleiton/fakegps-iphone-web/releases).
+1. Baixe o pacote **`fakegps-iphone_*_all.deb`** na aba [Releases](https://github.com/maxxcleiton/fakegps-iphone-web/releases).
 2. Instale no terminal:
    ```bash
-   sudo apt install ./fakegps-iphone_1.0.1_all.deb
+   sudo apt install ./fakegps-iphone_*_all.deb
    ```
 3. Abra pelo menu de aplicativos (**FakeGPS iPhone**) ou digite `fakegps-iphone` no terminal.
 
