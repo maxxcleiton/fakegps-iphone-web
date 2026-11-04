@@ -1,44 +1,60 @@
-# FakeGPS iPhone 📍
+# FakeGPS iPhone for Linux 📍
 
-Simulador de localização GPS para iPhone conectado via cabo USB no Linux (Xubuntu 22.04, 24.04, 26.04+).
+> Lightweight virtual location spoofer for connected iPhones on Linux (Ubuntu, Xubuntu, Debian, Mint).
 
-- Compatível com iOS 12 até iOS 18 e iOS 26+.
-- Interface web interativa com OpenStreetMap e busca de cidades/endereços por texto.
-- Sem necessidade de root/sudo para alterar o GPS (usa túnel userspace).
-- Sessão persistente: o GPS falso fica fixado no aparelho até você mandar limpar.
+[![Platform](https://img.shields.io/badge/platform-Linux-blue.svg)](https://github.com/maxxcleiton/fakegps-iphone-linux)
+[![iOS Support](https://img.shields.io/badge/iOS-12%20to%2026%2B-green.svg)](https://github.com/maxxcleiton/fakegps-iphone-linux)
+[![Architecture](https://img.shields.io/badge/arch-all-orange.svg)](https://github.com/maxxcleiton/fakegps-iphone-linux)
+
+**Languages:** [🇺🇸 English](README.md) | [🇧🇷 Português](README.pt-BR.md)
 
 ---
 
-## 📦 Como instalar em um PC novo
+## 🌟 Key Features
 
-### Método 1: Pacote .deb (Recomendado)
+* **Universal iOS Support:** Works on iOS 12 through **iOS 17, 18, and iOS 26+**.
+* **No Root / Sudo Required for Spoofing:** Communicates with iOS via in-process userspace RemoteXPC tunnel (`pymobiledevice3`).
+* **Interactive Map GUI:** Clean dark-themed web interface powered by Leaflet and OpenStreetMap.
+* **City & Address Search:** Search any street, landmark, or city worldwide via Nominatim.
+* **Persistent Session:** Fixes the simulated coordinates on the iPhone so iOS does not revert back to the real location until you decide to clear it.
+* **One-Click Server Shutdown:** Includes a dedicated **"⏹ Desligar"** (Stop) button in the web header to cleanly shut down the server when done.
+* **Native Desktop Integration:** Installs a menu entry with an icon in your desktop environment (XFCE, GNOME, KDE) and provides a `fakegps-iphone` command.
 
-1. Copie o arquivo `fakegps-iphone_1.0.0_all.deb` para a nova máquina (via pendrive, rede, etc.).
-2. Abra o terminal na pasta onde está o arquivo e rode:
+---
+
+## 📦 Installation
+
+### Method 1: Download `.deb` Package (Recommended)
+
+1. Download the latest **`fakegps-iphone_1.0.1_all.deb`** from the [Releases](https://github.com/maxxcleiton/fakegps-iphone-linux/releases) section.
+2. Open a terminal in the folder where you downloaded the file and run:
    ```bash
-   sudo apt install ./fakegps-iphone_1.0.0_all.deb
+   sudo apt install ./fakegps-iphone_1.0.1_all.deb
    ```
-   *(O `apt` baixa automaticamente o `usbmuxd`, `python3-venv` e configura o ambiente).*
+   *(Using `apt install ./...` automatically resolves and installs system prerequisites like `usbmuxd` and `python3-venv`).*
 
-3. Pronto! Para abrir, você pode:
-   - Procurar por **FakeGPS iPhone** no menu de aplicativos do Xubuntu, ou
-   - Digitar no terminal:
+3. Launch the app:
+   * Click **FakeGPS iPhone** in your application menu (under *Development* or *Accessories*), or
+   * Run in terminal:
      ```bash
      fakegps-iphone
      ```
+   The application will automatically start the background service and open your browser at `http://localhost:8765`.
 
 ---
 
-### Método 2: Sem instalar pacote (Rodar da pasta)
+### Method 2: Run from Source
 
-Se preferir rodar direto sem instalar o `.deb`:
+If you prefer to run directly without installing a `.deb` package:
 
-1. Instale os pré-requisitos do sistema:
+1. Install system prerequisites:
    ```bash
-   sudo apt update && sudo apt install -y python3 python3-venv usbmuxd
+   sudo apt update && sudo apt install -y python3 python3-venv usbmuxd curl
    ```
-2. Na pasta do projeto:
+2. Clone the repository and run:
    ```bash
+   git clone https://github.com/maxxcleiton/fakegps-iphone-linux.git
+   cd fakegps-iphone-linux
    python3 -m venv .venv
    .venv/bin/pip install -r requirements.txt
    ./start.sh
@@ -46,16 +62,25 @@ Se preferir rodar direto sem instalar o `.deb`:
 
 ---
 
-## 🛠️ Como recriar o arquivo .deb após modificações
+## 📱 iPhone Setup
 
-Se fizer qualquer alteração no código (`server.py`, `index.html`), basta rodar:
-```bash
-./build-deb.sh
-```
-Um novo `.deb` será gerado automaticamente.
+1. **First Connection:** When connecting your iPhone via USB, unlock the screen and tap **"Trust This Computer"** and enter your passcode.
+2. **Developer Mode (iOS 16+):**
+   * Go to **Settings** → **Privacy & Security** → **Developer Mode**.
+   * Toggle it **On** and follow the prompt to reboot your iPhone.
 
 ---
 
-## 📱 Dicas no iPhone
-1. **Primeira conexão:** Ao plugar o iPhone na USB, clique em **"Confiar neste Computador"** na tela do aparelho e digite sua senha de desbloqueio.
-2. **Modo Desenvolvedor (iOS 16+):** Em *Ajustes* → *Privacidade e Segurança* → *Modo Desenvolvedor* (deve estar Ativado).
+## 🛠️ Building the `.deb` Package
+
+If you modify `server.py` or `index.html`, you can re-generate the `.deb` package at any time:
+```bash
+./build-deb.sh
+```
+The output `.deb` will be generated in the root of the repository.
+
+---
+
+## 📄 License
+
+Open source under the [MIT License](LICENSE).

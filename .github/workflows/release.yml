@@ -1,0 +1,29 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    name: Build & Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build .deb package
+        run: |
+          chmod +x build-deb.sh
+          ./build-deb.sh
+
+      - name: Publish Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: fakegps-iphone_*.deb
+          generate_release_notes: true
+          draft: false
+          prerelease: false
