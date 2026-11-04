@@ -58,7 +58,7 @@ jobs:
 
       - name: Build Windows .exe with PyInstaller
         run: |
-          pyinstaller --noconfirm --onefile --name "FakeGPS-iPhone" --add-data "index.html;." --icon "fakegps-iphone.ico" server.py
+          pyinstaller --noconfirm --onefile --name "FakeGPS-iPhone" --collect-all pymobiledevice3 --collect-all uvicorn --add-data "index.html;." --icon "fakegps-iphone.ico" server.py
 
       - name: Upload Windows exe artifact
         uses: actions/upload-artifact@v4

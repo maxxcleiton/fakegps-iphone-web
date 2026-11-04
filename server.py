@@ -312,5 +312,4 @@ async def index():
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8765))
-    log.info("FakeGPS iPhone disponível em http://localhost:%d", port)
-    uvicorn.run("server:app", host="127.0.0.1", port=port, reload=False)
+    uvicorn.run(app, host="127.0.0.1", port=port)
