@@ -1,0 +1,296 @@
+"""
+FakeGPS iPhone — Servidor Web Local
+Compatível com iOS 12 até iOS 18 / iOS 26+
+Conexão persistente direta via API Python (pymobiledevice3)
+"""
+
+import asyncio
+import logging
+import os
+from contextlib import AsyncExitStack, asynccontextmanager
+from pathlib import Path
+from typing import Optional
+
+import uvicorn
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
+from pydantic import BaseModel
+
+from pymobiledevice3.usbmux import select_devices_by_connection_type
+from pymobiledevice3.lockdown import create_using_usbmux
+from pymobiledevice3.remote import userspace_tunnel
+from pymobiledevice3.services.dvt.instruments.dvt_provider import DvtProvider
+from pymobiledevice3.services.dvt.instruments.location_simulation import LocationSimulation
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[logging.StreamHandler()],
+)
+log = logging.getLogger("fakegps")
+
+MODEL_NAMES = {
+    "iPhone13,1": "iPhone 12 mini",
+    "iPhone13,2": "iPhone 12",
+    "iPhone13,3": "iPhone 12 Pro",
+    "iPhone13,4": "iPhone 12 Pro Max",
+    "iPhone14,2": "iPhone 13 Pro",
+    "iPhone14,3": "iPhone 13 Pro Max",
+    "iPhone14,4": "iPhone 13 mini",
+    "iPhone14,5": "iPhone 13",
+    "iPhone14,7": "iPhone 14",
+    "iPhone14,8": "iPhone 14 Plus",
+    "iPhone15,2": "iPhone 14 Pro",
+    "iPhone15,3": "iPhone 14 Pro Max",
+    "iPhone15,4": "iPhone 15",
+    "iPhone15,5": "iPhone 15 Plus",
+    "iPhone16,1": "iPhone 15 Pro",
+    "iPhone16,2": "iPhone 15 Pro Max",
+    "iPhone17,1": "iPhone 16 Pro",
+    "iPhone17,2": "iPhone 16 Pro Max",
+    "iPhone17,3": "iPhone 16",
+    "iPhone17,4": "iPhone 16 Plus",
+}
+
+
+class LocationManager:
+    def __init__(self):
+        self.lock = asyncio.Lock()
+        self.stack: Optional[AsyncExitStack] = None
+        self.loc_sim: Optional[LocationSimulation] = None
+
+        self.serial: Optional[str] = None
+        self.device_name: str = "iPhone"
+        self.ios_version: str = ""
+        self.status: str = "disconnected"  # disconnected | connected | simulating | error
+        self.status_msg: str = "Aguardando iPhone via cabo USB..."
+        self.current_lat: Optional[float] = None
+        self.current_lng: Optional[float] = None
+
+    async def detect_device(self):
+        """Verifica se há um iPhone plugado via USB."""
+        try:
+            devices = await select_devices_by_connection_type(connection_type="USB")
+            if not devices:
+                if self.status != "disconnected":
+                    log.info("iPhone desconectado da USB.")
+                    await self._reset_internal(clean=False)
+                self.status = "disconnected"
+                self.status_msg = "Nenhum iPhone conectado na USB."
+                return None
+
+            device = devices[0]
+            self.serial = device.serial
+
+            if self.status == "disconnected" or not self.ios_version:
+                try:
+                    ld = await create_using_usbmux(serial=self.serial)
+                    raw_type = getattr(ld, "product_type", "iPhone")
+                    self.device_name = MODEL_NAMES.get(raw_type, raw_type)
+                    self.ios_version = str(getattr(ld, "product_version", ""))
+                    if self.status != "simulating":
+                        self.status = "connected"
+                        self.status_msg = f"{self.device_name} (iOS {self.ios_version}) Conectado"
+                    log.info(
+                        "Dispositivo detectado: %s (iOS %s) [%s]",
+                        self.device_name,
+                        self.ios_version,
+                        self.serial,
+                    )
+                except Exception as e:
+                    log.warning("Falha ao ler lockdown info: %s", e)
+                    self.status = "connected"
+                    self.status_msg = "iPhone Conectado (aguardando liberação de tela/confirmação)"
+
+            return device
+        except Exception as e:
+            log.error("Erro ao verificar USB: %s", e)
+            self.status = "error"
+            self.status_msg = f"Erro USB: {e}"
+            return None
+
+    async def ensure_connected(self):
+        """Garante que a sessão DVT de simulação está aberta e ativa."""
+        if self.loc_sim is not None:
+            return
+
+        device = await self.detect_device()
+        if not device or not self.serial:
+            raise RuntimeError("Nenhum iPhone detectado via USB. Conecte o cabo e clique em 'Confiar'.")
+
+        log.info("Iniciando sessão DVT com o iPhone %s...", self.serial)
+        self.status_msg = "Iniciando sessão de GPS simulado..."
+
+        new_stack = AsyncExitStack()
+        try:
+            # Identifica a versão do iOS para escolher a rota correta
+            major = 17
+            if self.ios_version:
+                try:
+                    major = int(self.ios_version.split(".")[0])
+                except ValueError:
+                    major = 17
+
+            if major >= 17:
+                log.info("Estabelecendo tunnel userspace RSD para iOS %s...", self.ios_version)
+                rsd = await userspace_tunnel.establish_userspace_rsd(serial=self.serial)
+                dvt = await new_stack.enter_async_context(DvtProvider(rsd))
+            else:
+                log.info("Conectando direto via lockdown para iOS %s...", self.ios_version)
+                ld = await create_using_usbmux(serial=self.serial)
+                dvt = await new_stack.enter_async_context(DvtProvider(ld))
+
+            loc_sim = await new_stack.enter_async_context(LocationSimulation(dvt))
+            self.stack = new_stack
+            self.loc_sim = loc_sim
+            log.info("Sessão DVT pronta para receber coordenadas.")
+        except Exception as e:
+            await new_stack.aclose()
+            log.exception("Falha ao abrir sessão DVT")
+            self.status = "error"
+            self.status_msg = f"Erro ao iniciar sessão DVT: {e}"
+            raise
+
+    async def set_location(self, lat: float, lng: float):
+        """Aplica a coordenada e MANTÉM a sessão aberta para o iOS não reverter."""
+        async with self.lock:
+            try:
+                await self.ensure_connected()
+                log.info("Enviando coordenadas para o iPhone: %.6f, %.6f", lat, lng)
+                await self.loc_sim.set(lat, lng)
+
+                self.current_lat = lat
+                self.current_lng = lng
+                self.status = "simulating"
+                self.status_msg = f"GPS Simulado: {lat:.5f}, {lng:.5f}"
+                log.info("Localização fixada com sucesso!")
+            except Exception as e:
+                log.exception("Erro ao aplicar localização")
+                # Se a sessão caiu, reseta para a próxima tentativa reconectar do zero
+                await self._reset_internal(clean=False)
+                raise RuntimeError(f"Falha ao enviar coordenada ao iPhone: {e}")
+
+    async def clear_location(self):
+        """Restaura o GPS real do aparelho."""
+        async with self.lock:
+            if self.loc_sim is not None:
+                try:
+                    log.info("Limpando simulação de localização...")
+                    await self.loc_sim.clear()
+                except Exception as e:
+                    log.warning("Erro ao chamar clear(): %s", e)
+
+            self.current_lat = None
+            self.current_lng = None
+            self.status = "connected"
+            self.status_msg = f"{self.device_name} Conectado (GPS Real)"
+            log.info("GPS restaurado para localização real.")
+
+    async def disconnect(self):
+        """Encerra a sessão DVT de forma limpa."""
+        async with self.lock:
+            await self._reset_internal(clean=True)
+
+    async def _reset_internal(self, clean: bool = True):
+        if self.loc_sim and clean:
+            try:
+                await self.loc_sim.clear()
+            except Exception:
+                pass
+        if self.stack:
+            try:
+                await self.stack.aclose()
+            except Exception:
+                pass
+        self.stack = None
+        self.loc_sim = None
+        self.current_lat = None
+        self.current_lng = None
+        self.status = "disconnected"
+
+
+manager = LocationManager()
+
+
+async def background_monitor():
+    """Monitora a conexão do iPhone a cada 2.5s."""
+    while True:
+        try:
+            await manager.detect_device()
+        except Exception as e:
+            log.debug("Monitor loop exception: %s", e)
+        await asyncio.sleep(2.5)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    monitor_task = asyncio.create_task(background_monitor())
+    yield
+    monitor_task.cancel()
+    await manager.disconnect()
+
+
+app = FastAPI(title="FakeGPS iPhone", lifespan=lifespan)
+
+
+class LocationRequest(BaseModel):
+    lat: float
+    lng: float
+
+
+@app.get("/api/status")
+async def api_status():
+    return {
+        "status": manager.status,
+        "message": manager.status_msg,
+        "device_name": manager.device_name,
+        "ios_version": manager.ios_version,
+        "current_lat": manager.current_lat,
+        "current_lng": manager.current_lng,
+    }
+
+
+@app.post("/api/location")
+async def api_set_location(req: LocationRequest):
+    if not (-90.0 <= req.lat <= 90.0 and -180.0 <= req.lng <= 180.0):
+        raise HTTPException(status_code=400, detail="Coordenadas fora do intervalo válido.")
+
+    try:
+        await manager.set_location(req.lat, req.lng)
+        return {"ok": True, "lat": req.lat, "lng": req.lng}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/location")
+async def api_clear_location():
+    try:
+        await manager.clear_location()
+        return {"ok": True, "message": "GPS restaurado para localização real."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/reconnect")
+async def api_reconnect():
+    await manager.disconnect()
+    await manager.detect_device()
+@app.post("/api/shutdown")
+async def api_shutdown():
+    log.info("Recebida solicitação para desligar o servidor...")
+    async def _stop():
+        await asyncio.sleep(0.5)
+        os._exit(0)
+    asyncio.create_task(_stop())
+    return {"ok": True, "message": "Servidor encerrando..."}
+
+
+@app.get("/")
+async def index():
+    return FileResponse(Path(__file__).parent / "index.html")
+
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 8765))
+    log.info("FakeGPS iPhone disponível em http://localhost:%d", port)
+    uvicorn.run("server:app", host="127.0.0.1", port=port, reload=False)

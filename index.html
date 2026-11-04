@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FakeGPS iPhone</title>
+
+<!-- Leaflet CSS -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<!-- Leaflet Control Geocoder CSS -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder@2.4.0/dist/Control.Geocoder.css" />
+
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #0f1117;
+    color: #e8eaf6;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  /* ── Header ── */
+  header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 18px;
+    background: #1a1d2e;
+    border-bottom: 1px solid #2a2d42;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+  }
+
+  header h1 {
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: .3px;
+    color: #c9d1ff;
+    white-space: nowrap;
+  }
+
+  .status-badge {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 13px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    background: #252840;
+    border: 1px solid #3a3d58;
+    color: #aab0d6;
+    white-space: nowrap;
+  }
+
+  .status-dot {
+    width: 9px; height: 9px;
+    border-radius: 50%;
+    background: #555;
+    flex-shrink: 0;
+    transition: background .4s;
+  }
+  .status-dot.connecting { background: #f59e0b; animation: pulse 1.2s infinite; }
+  .status-dot.connected  { background: #22c55e; }
+  .status-dot.simulating { background: #38bdf8; box-shadow: 0 0 8px #38bdf8; animation: pulse 2s infinite; }
+  .status-dot.error      { background: #ef4444; }
+
+  @keyframes pulse {
+    0%,100% { opacity: 1; }
+    50%      { opacity: .3; }
+  }
+
+  .btn-reconnect {
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    border: 1px solid #3a3d58;
+    background: #252840;
+    color: #aab0d6;
+    cursor: pointer;
+    transition: background .2s;
+  }
+  .btn-reconnect:hover { background: #2e3155; }
+
+  .btn-shutdown {
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    border: 1px solid #7f1d1d;
+    background: #450a0a;
+    color: #fca5a5;
+    cursor: pointer;
+    transition: all .2s;
+  }
+  .btn-shutdown:hover { background: #7f1d1d; color: #fff; }
+
+  /* ── Main layout ── */
+  main {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* ── Sidebar ── */
+  aside {
+    width: 310px;
+    min-width: 260px;
+    max-width: 340px;
+    background: #1a1d2e;
+    border-right: 1px solid #2a2d42;
+    display: flex;
+    flex-direction: column;
+    padding: 16px;
+    gap: 14px;
+    overflow-y: auto;
+    flex-shrink: 0;
+  }
+
+  .section-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .8px;
+    color: #6b72b0;
+    margin-bottom: 2px;
+  }
+
+  /* Search */
+  .search-wrap { position: relative; }
+  #search-input {
+    width: 100%;
+    padding: 9px 12px 9px 36px;
+    border-radius: 8px;
+    border: 1px solid #2a2d42;
+    background: #252840;
+    color: #e8eaf6;
+    font-size: 14px;
+    outline: none;
+    transition: border-color .2s;
+  }
+  #search-input:focus { border-color: #5b65cc; }
+  .search-icon {
+    position: absolute;
+    left: 10px; top: 50%;
+    transform: translateY(-50%);
+    color: #6b72b0;
+    pointer-events: none;
+    font-size: 15px;
+  }
+
+  #search-results {
+    margin-top: 4px;
+    border-radius: 8px;
+    border: 1px solid #2a2d42;
+    background: #252840;
+    max-height: 200px;
+    overflow-y: auto;
+    display: none;
+  }
+  .search-result-item {
+    padding: 8px 12px;
+    font-size: 13px;
+    cursor: pointer;
+    color: #c8cce8;
+    border-bottom: 1px solid #2a2d42;
+    line-height: 1.4;
+  }
+  .search-result-item:last-child { border-bottom: none; }
+  .search-result-item:hover { background: #2e3155; }
+  .search-result-item .result-name { font-weight: 500; }
+  .search-result-item .result-detail { font-size: 11px; color: #6b72b0; margin-top: 1px; }
+
+  /* Coordinates */
+  .coords-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .coord-group { display: flex; flex-direction: column; gap: 4px; }
+  .coord-group label {
+    font-size: 11px;
+    color: #6b72b0;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+  }
+  .coord-group input {
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid #2a2d42;
+    background: #252840;
+    color: #e8eaf6;
+    font-size: 14px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    outline: none;
+    transition: border-color .2s;
+    width: 100%;
+  }
+  .coord-group input:focus { border-color: #5b65cc; }
+
+  /* Buttons */
+  .btn {
+    width: 100%;
+    padding: 11px;
+    border-radius: 10px;
+    border: none;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity .2s, transform .1s;
+    letter-spacing: .2px;
+  }
+  .btn:active { transform: scale(.97); }
+  .btn:disabled { opacity: .4; cursor: not-allowed; transform: none; }
+
+  .btn-apply {
+    background: linear-gradient(135deg, #5b65cc, #7c5cbf);
+    color: #fff;
+  }
+  .btn-apply:hover:not(:disabled) { opacity: .9; }
+
+  .btn-clear {
+    background: #252840;
+    color: #c8cce8;
+    border: 1px solid #2a2d42;
+  }
+  .btn-clear:hover:not(:disabled) { background: #2e3155; }
+
+  /* Toast */
+  #toast {
+    position: fixed;
+    bottom: 24px; left: 50%;
+    transform: translateX(-50%) translateY(80px);
+    background: #1f2235;
+    border: 1px solid #3a3d58;
+    border-radius: 10px;
+    padding: 10px 20px;
+    font-size: 14px;
+    color: #e8eaf6;
+    transition: transform .3s;
+    z-index: 9999;
+    white-space: nowrap;
+    pointer-events: none;
+  }
+  #toast.show { transform: translateX(-50%) translateY(0); }
+  #toast.ok   { border-color: #22c55e; color: #86efac; }
+  #toast.err  { border-color: #ef4444; color: #fca5a5; }
+
+  /* Active pin info */
+  #active-location {
+    display: none;
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: #1e2f1e;
+    border: 1px solid #2d6a2d;
+    font-size: 13px;
+    color: #86efac;
+    gap: 6px;
+    flex-direction: column;
+  }
+  #active-location.show { display: flex; }
+  #active-location .loc-title { font-weight: 600; font-size: 12px; color: #4ade80; }
+
+  /* Map */
+  #map {
+    flex: 1;
+    background: #1a1a2e;
+  }
+
+  /* Leaflet dark overrides */
+  .leaflet-control-zoom a,
+  .leaflet-bar a {
+    background: #252840 !important;
+    color: #c8cce8 !important;
+    border-color: #3a3d58 !important;
+  }
+  .leaflet-bar a:hover { background: #2e3155 !important; }
+  .leaflet-popup-content-wrapper {
+    background: #1a1d2e;
+    color: #e8eaf6;
+    border: 1px solid #3a3d58;
+    box-shadow: 0 4px 20px rgba(0,0,0,.5);
+  }
+  .leaflet-popup-tip { background: #1a1d2e; }
+
+  /* Geocoder dark */
+  .leaflet-control-geocoder {
+    background: #252840 !important;
+    border: 1px solid #3a3d58 !important;
+  }
+  .leaflet-control-geocoder input {
+    background: #252840 !important;
+    color: #e8eaf6 !important;
+  }
+
+  hr { border: none; border-top: 1px solid #2a2d42; }
+
+  /* Spinner */
+  .spinner {
+    display: inline-block;
+    width: 14px; height: 14px;
+    border: 2px solid #3a3d58;
+    border-top-color: #5b65cc;
+    border-radius: 50%;
+    animation: spin .7s linear infinite;
+    vertical-align: middle;
+    margin-right: 6px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<header>
+  <h1>📍 FakeGPS iPhone</h1>
+  <div class="status-badge">
+    <span class="status-dot" id="status-dot"></span>
+    <span id="status-text">Conectando...</span>
+  </div>
+  <div style="margin-left: auto; display: flex; gap: 8px;">
+    <button class="btn-reconnect" onclick="restartTunnel()">🔄 Reconectar</button>
+    <button class="btn-shutdown" onclick="shutdownServer()" title="Encerrar o servidor FakeGPS">⏹ Desligar</button>
+  </div>
+</header>
+
+<main>
+  <!-- Sidebar -->
+  <aside>
+
+    <!-- Busca -->
+    <div>
+      <div class="section-label">Buscar local</div>
+      <div class="search-wrap">
+        <span class="search-icon">🔍</span>
+        <input
+          id="search-input"
+          type="text"
+          placeholder="Cidade, endereço, ponto de interesse..."
+          autocomplete="off"
+          oninput="onSearchInput()"
+          onkeydown="onSearchKey(event)"
+        />
+      </div>
+      <div id="search-results"></div>
+    </div>
+
+    <hr>
+
+    <!-- Coordenadas -->
+    <div>
+      <div class="section-label">Coordenadas</div>
+      <div class="coords-row">
+        <div class="coord-group">
+          <label>Latitude</label>
+          <input id="lat-input" type="number" step="any" placeholder="-23.5505" />
+        </div>
+        <div class="coord-group">
+          <label>Longitude</label>
+          <input id="lng-input" type="number" step="any" placeholder="-46.6333" />
+        </div>
+      </div>
+    </div>
+
+    <!-- Localização ativa -->
+    <div id="active-location">
+      <span class="loc-title">📡 GPS Simulado Ativo</span>
+      <span id="active-coords"></span>
+      <span id="active-name" style="font-size:12px; color:#4ade80; opacity:.8"></span>
+    </div>
+
+    <hr>
+
+    <!-- Ações -->
+    <button class="btn btn-apply" id="btn-apply" onclick="applyLocation()">
+      Aplicar no iPhone
+    </button>
+    <button class="btn btn-clear" id="btn-clear" onclick="clearLocation()">
+      Restaurar GPS Real
+    </button>
+
+  </aside>
+
+  <!-- Mapa -->
+  <div id="map"></div>
+</main>
+
+<div id="toast"></div>
+
+<!-- Scripts -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+// ─── Map setup ───────────────────────────────────────────────────
+// Limites geográficos do planeta Terra (evita repetições e loops)
+const worldBounds = L.latLngBounds(
+  L.latLng(-85.05112878, -180),
+  L.latLng(85.05112878, 180)
+);
+
+const map = L.map('map', {
+  center: [-15.7801, -47.9292], // Brasília como padrão
+  zoom: 5,
+  minZoom: 3,
+  maxBounds: worldBounds,
+  maxBoundsViscosity: 1.0, // Bloqueia arrastar além dos limites reais da Terra
+  zoomControl: true,
+});
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+  maxZoom: 19,
+  noWrap: true, // Proíbe o mapa mundi de se duplicar para os lados
+  bounds: worldBounds,
+}).addTo(map);
+
+// Marcador personalizado
+const pinIcon = L.divIcon({
+  html: `<div style="font-size:28px;line-height:1;filter:drop-shadow(0 2px 4px rgba(0,0,0,.6))">📍</div>`,
+  className: '',
+  iconSize: [28, 28],
+  iconAnchor: [14, 28],
+  popupAnchor: [0, -30],
+});
+
+let marker = null;
+let currentLat = null, currentLng = null;
+
+function setPin(lat, lng, popupText) {
+  // Normaliza latitude e longitude entre limites reais
+  lat = Math.max(-90, Math.min(90, lat));
+  lng = ((lng + 180) % 360 + 360) % 360 - 180;
+
+  currentLat = lat;
+  currentLng = lng;
+  document.getElementById('lat-input').value = lat.toFixed(6);
+  document.getElementById('lng-input').value = lng.toFixed(6);
+
+  if (!marker) {
+    marker = L.marker([lat, lng], { icon: pinIcon }).addTo(map);
+  } else {
+    marker.setLatLng([lat, lng]);
+  }
+  if (popupText) marker.bindPopup(popupText).openPopup();
+  map.setView([lat, lng], Math.max(map.getZoom(), 13));
+}
+
+// Clique no mapa
+map.on('click', async (e) => {
+  // Garante que o clique sempre resulte em coordenadas oficiais (-180 a +180)
+  const wrapped = e.latlng.wrap();
+  const lat = wrapped.lat;
+  const lng = wrapped.lng;
+  setPin(lat, lng);
+  // Geocode reverso para mostrar o nome do local
+  try {
+    const r = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
+      { headers: { 'Accept-Language': 'pt-BR,pt;q=0.9' } }
+    );
+    const d = await r.json();
+    if (d && d.display_name) {
+      marker.bindPopup(`<b>${truncate(d.display_name, 60)}</b><br><small>${lat.toFixed(5)}, ${lng.toFixed(5)}</small>`).openPopup();
+    }
+  } catch {}
+});
+
+// ─── Busca (Nominatim) ───────────────────────────────────────────
+let searchTimeout = null;
+let searchResults = [];
+
+function onSearchInput() {
+  const q = document.getElementById('search-input').value.trim();
+  clearTimeout(searchTimeout);
+  if (q.length < 3) {
+    hideResults();
+    return;
+  }
+  searchTimeout = setTimeout(() => doSearch(q), 400);
+}
+
+async function doSearch(query) {
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=6&accept-language=pt-BR,pt;q=0.9`;
+    const r = await fetch(url);
+    const data = await r.json();
+    searchResults = data;
+    renderResults(data);
+  } catch (e) {
+    console.error('Search error:', e);
+  }
+}
+
+function renderResults(results) {
+  const box = document.getElementById('search-results');
+  if (!results.length) {
+    box.innerHTML = '<div class="search-result-item" style="color:#6b72b0">Nenhum resultado encontrado.</div>';
+    box.style.display = 'block';
+    return;
+  }
+  box.innerHTML = results.map((r, i) => {
+    const parts = r.display_name.split(',');
+    const name = parts[0].trim();
+    const detail = parts.slice(1, 3).join(',').trim();
+    return `<div class="search-result-item" onclick="selectResult(${i})">
+      <div class="result-name">${name}</div>
+      <div class="result-detail">${detail}</div>
+    </div>`;
+  }).join('');
+  box.style.display = 'block';
+}
+
+function selectResult(i) {
+  const r = searchResults[i];
+  if (!r) return;
+  const lat = parseFloat(r.lat), lng = parseFloat(r.lon);
+  setPin(lat, lng, `<b>${truncate(r.display_name, 60)}</b>`);
+  document.getElementById('search-input').value = r.display_name.split(',')[0].trim();
+  hideResults();
+}
+
+function hideResults() {
+  document.getElementById('search-results').style.display = 'none';
+}
+
+function onSearchKey(e) {
+  if (e.key === 'Escape') hideResults();
+}
+
+// Fecha resultado ao clicar fora
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.search-wrap') && !e.target.closest('#search-results')) {
+    hideResults();
+  }
+});
+
+// ─── API calls ───────────────────────────────────────────────────
+async function applyLocation() {
+  const lat = parseFloat(document.getElementById('lat-input').value);
+  const lng = parseFloat(document.getElementById('lng-input').value);
+
+  if (isNaN(lat) || isNaN(lng)) {
+    toast('Selecione um local no mapa ou informe as coordenadas.', 'err');
+    return;
+  }
+  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+    toast('Coordenadas inválidas.', 'err');
+    return;
+  }
+
+  setBusy(true);
+  try {
+    const r = await fetch('/api/location', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ lat, lng }),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || 'Erro desconhecido');
+    toast(`✅ GPS aplicado: ${lat.toFixed(5)}, ${lng.toFixed(5)}`, 'ok');
+    showActiveLocation(lat, lng);
+  } catch (e) {
+    toast(`❌ ${e.message}`, 'err');
+  } finally {
+    setBusy(false);
+  }
+}
+
+async function clearLocation() {
+  setBusy(true);
+  try {
+    const r = await fetch('/api/location', { method: 'DELETE' });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || 'Erro');
+    toast('🔄 GPS restaurado para localização real.', 'ok');
+    hideActiveLocation();
+  } catch (e) {
+    toast(`❌ ${e.message}`, 'err');
+  } finally {
+    setBusy(false);
+  }
+}
+
+async function restartTunnel() {
+  try {
+    await fetch('/api/reconnect', { method: 'POST' });
+    toast('🔄 Reconectando ao iPhone...', '');
+  } catch {}
+}
+
+async function shutdownServer() {
+  if (!confirm("Deseja realmente desligar o servidor do FakeGPS?")) return;
+  try {
+    await fetch('/api/shutdown', { method: 'POST' });
+  } catch {}
+  document.body.innerHTML = `
+    <div style="display:flex;height:100vh;align-items:center;justify-content:center;flex-direction:column;gap:16px;background:#0f1117;color:#e8eaf6;text-align:center;padding:20px;">
+      <div style="font-size:48px;">🛑</div>
+      <h2 style="font-size:24px;">Servidor Desligado</h2>
+      <p style="color:#aab0d6;max-width:400px;">O FakeGPS iPhone foi finalizado com sucesso. Você já pode fechar esta aba.</p>
+    </div>
+  `;
+}
+
+// ─── Status polling ──────────────────────────────────────────────
+async function pollStatus() {
+  try {
+    const r = await fetch('/api/status');
+    const d = await r.json();
+    updateStatusUI(d);
+
+    if (d.current_lat != null && d.current_lng != null) {
+      showActiveLocation(d.current_lat, d.current_lng);
+    } else {
+      hideActiveLocation();
+    }
+  } catch {}
+}
+
+function updateStatusUI(d) {
+  const dot = document.getElementById('status-dot');
+  const txt = document.getElementById('status-text');
+
+  dot.className = 'status-dot ' + d.status;
+
+  const deviceLabel = d.device_name ? `${d.device_name} (iOS ${d.ios_version})` : 'iPhone';
+  const statusMap = {
+    disconnected: 'Desconectado',
+    connecting:   'Conectando...',
+    connected:    `${deviceLabel} Conectado`,
+    simulating:   `GPS Ativo · ${deviceLabel}`,
+    error:        'Erro de Conexão',
+  };
+  txt.textContent = statusMap[d.status] || d.message || d.status;
+
+  const canAct = d.status === 'connected' || d.status === 'simulating';
+  document.getElementById('btn-apply').disabled = !canAct;
+  document.getElementById('btn-clear').disabled = !canAct;
+}
+
+function showActiveLocation(lat, lng) {
+  const el = document.getElementById('active-location');
+  document.getElementById('active-coords').textContent = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+  el.classList.add('show');
+}
+function hideActiveLocation() {
+  document.getElementById('active-location').classList.remove('show');
+}
+
+// Inicializa botões desabilitados
+document.getElementById('btn-apply').disabled = true;
+document.getElementById('btn-clear').disabled = true;
+
+// Poll a cada 3s
+pollStatus();
+setInterval(pollStatus, 3000);
+
+// ─── Helpers ─────────────────────────────────────────────────────
+function setBusy(busy) {
+  document.getElementById('btn-apply').disabled = busy;
+  document.getElementById('btn-clear').disabled = busy;
+  if (busy) {
+    document.getElementById('btn-apply').innerHTML = '<span class="spinner"></span>Aplicando...';
+  } else {
+    document.getElementById('btn-apply').innerHTML = 'Aplicar no iPhone';
+  }
+}
+
+let toastTimer = null;
+function toast(msg, type) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = `show ${type}`;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.className = ''; }, 3500);
+}
+
+function truncate(str, n) {
+  return str.length > n ? str.slice(0, n) + '…' : str;
+}
+</script>
+</body>
+</html>

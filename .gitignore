@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+
+# Builds
+build_deb/
+*.deb
+
+# Logs e sistema
+*.log
+.DS_Store
+.idea/
+.vscode/

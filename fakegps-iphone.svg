@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4f46e5"/>
+      <stop offset="100%" stop-color="#7c3aed"/>
+    </linearGradient>
+    <linearGradient id="pin" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ef4444"/>
+      <stop offset="100%" stop-color="#dc2626"/>
+    </linearGradient>
+  </defs>
+  <!-- Background rounded squircle -->
+  <rect x="8" y="8" width="112" height="112" rx="28" fill="url(#bg)"/>
+  
+  <!-- Map grid circles -->
+  <circle cx="64" cy="62" r="38" fill="none" stroke="#ffffff" stroke-opacity="0.15" stroke-width="2"/>
+  <circle cx="64" cy="62" r="26" fill="none" stroke="#ffffff" stroke-opacity="0.25" stroke-width="2" stroke-dasharray="4 4"/>
+  <circle cx="64" cy="62" r="14" fill="none" stroke="#ffffff" stroke-opacity="0.3" stroke-width="2"/>
+  
+  <!-- GPS Pin -->
+  <path d="M64 28 C50.745 28 40 38.745 40 52 C40 68 64 96 64 96 C64 96 88 68 88 52 C88 38.745 77.255 28 64 28 Z" fill="url(#pin)"/>
+  <!-- Pin inner white dot -->
+  <circle cx="64" cy="52" r="9" fill="#ffffff"/>
+  <!-- Satellite pulse dot -->
+  <circle cx="94" cy="34" r="4" fill="#38bdf8"/>
+</svg>
