@@ -222,9 +222,29 @@ async def background_monitor():
         await asyncio.sleep(2.5)
 
 
+def get_resource_path(relative_path: str) -> Path:
+    """Retorna o caminho do arquivo, compatível com PyInstaller (.exe) e execução normal."""
+    if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+        base_path = Path(sys._MEIPASS)
+    else:
+        base_path = Path(__file__).parent
+    return base_path / relative_path
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     monitor_task = asyncio.create_task(background_monitor())
+
+    # Se executado como .exe compilado (PyInstaller), abre o navegador automaticamente
+    if getattr(sys, "frozen", False):
+        import webbrowser
+
+        async def _open_browser():
+            await asyncio.sleep(1.2)
+            webbrowser.open("http://localhost:8765")
+
+        asyncio.create_task(_open_browser())
+
     yield
     monitor_task.cancel()
     await manager.disconnect()
@@ -287,7 +307,7 @@ async def api_shutdown():
 
 @app.get("/")
 async def index():
-    return FileResponse(Path(__file__).parent / "index.html")
+    return FileResponse(get_resource_path("index.html"))
 
 
 if __name__ == "__main__":

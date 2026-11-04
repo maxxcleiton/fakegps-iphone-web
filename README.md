@@ -8,6 +8,10 @@
 
 **Languages:** [🇺🇸 English](README.md) | [🇧🇷 Português](README.pt-BR.md)
 
+<p align="center">
+  <img src="screenshot.png" alt="FakeGPS iPhone Web Interface" width="900">
+</p>
+
 ---
 
 ## 🌟 Key Features
@@ -19,10 +23,21 @@
 * **City & Address Search:** Search any street, landmark, or city worldwide via Nominatim.
 * **Persistent Session:** Coordinates remain fixed on the iPhone until you click "Restore Real GPS".
 * **One-Click Server Shutdown:** Includes a dedicated **"⏹ Desligar"** (Stop) button in the header to cleanly terminate the server from the browser.
+* **Standalone Windows `.exe`:** No Python installation needed on Windows—just download and double-click!
 
 ---
 
 ## 🚀 Quick Start by Operating System
+
+### 🪟 Windows (10 / 11)
+
+1. **Prerequisite:** Ensure you have **Apple Devices** (from Microsoft Store) or **iTunes** installed so Windows has the official Apple USB drivers.
+2. **Download:** Get the standalone **`FakeGPS-iPhone.exe`** from the [Releases](https://github.com/maxxcleiton/fakegps-iphone-web/releases) page.
+3. **Run:** Double-click **`FakeGPS-iPhone.exe`**.
+   * It starts the local service and opens your browser at `http://localhost:8765` automatically!
+   *(Alternative: Download `FakeGPS-iPhone-Windows.zip` and run `start.bat` if you prefer).*
+
+---
 
 ### 🐧 Linux (Ubuntu, Xubuntu, Debian, Mint)
 
@@ -40,15 +55,6 @@ git clone https://github.com/maxxcleiton/fakegps-iphone-web.git
 cd fakegps-iphone-web
 ./start.sh
 ```
-
----
-
-### 🪟 Windows (10 / 11)
-
-1. **Prerequisite:** Ensure you have **Apple Devices** (from Microsoft Store) or **iTunes** installed so Windows has the official Apple USB drivers.
-2. Download **`FakeGPS-iPhone-Windows.zip`** from [Releases](https://github.com/maxxcleiton/fakegps-iphone-web/releases) (or clone the repository).
-3. Extract the ZIP and double-click **`start.bat`**.
-   * It will automatically set up the virtual environment and launch your browser at `http://localhost:8765`.
 
 ---
 
@@ -74,7 +80,7 @@ cd fakegps-iphone-web
 
 ## 🛠️ Building Packages Locally
 
-To rebuild the Debian package after modifying source code:
+To rebuild the Debian package locally on Linux:
 ```bash
 ./build-deb.sh
 ```

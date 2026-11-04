@@ -8,6 +8,10 @@
 
 **Idiomas:** [🇺🇸 English](README.md) | [🇧🇷 Português](README.pt-BR.md)
 
+<p align="center">
+  <img src="screenshot.png" alt="Interface Web do FakeGPS iPhone" width="900">
+</p>
+
 ---
 
 ## 🌟 Recursos Principais
@@ -19,10 +23,21 @@
 * **Busca por Cidades e Endereços:** Pesquise qualquer rua, ponto turístico ou cidade do mundo via Nominatim.
 * **Sessão Persistente:** Fixa a coordenada simulada no aparelho para que o iOS não restaure o GPS real sozinho.
 * **Botão Desligar:** Botão **"⏹ Desligar"** no cabeçalho para finalizar o servidor em segundo plano diretamente pelo navegador.
+* **Executável `.exe` para Windows:** Não precisa de Python instalado no Windows—basta baixar e dar dois cliques!
 
 ---
 
 ## 🚀 Como Usar por Sistema Operacional
+
+### 🪟 Windows (10 / 11)
+
+1. **Pré-requisito:** Certifique-se de ter o app **Dispositivos Apple (Apple Devices)** (da Microsoft Store) ou o **iTunes** instalado para que o Windows possua os drivers USB oficiais da Apple.
+2. **Download:** Baixe o executável **`FakeGPS-iPhone.exe`** na aba [Releases](https://github.com/maxxcleiton/fakegps-iphone-web/releases).
+3. **Execução:** Dê dois cliques em **`FakeGPS-iPhone.exe`**.
+   * Ele inicia o serviço e abre o navegador em `http://localhost:8765` automaticamente!
+   *(Alternativa: Baixe `FakeGPS-iPhone-Windows.zip` e execute `start.bat` se preferir).*
+
+---
 
 ### 🐧 Linux (Ubuntu, Xubuntu, Debian, Mint)
 
@@ -40,15 +55,6 @@ git clone https://github.com/maxxcleiton/fakegps-iphone-web.git
 cd fakegps-iphone-web
 ./start.sh
 ```
-
----
-
-### 🪟 Windows (10 / 11)
-
-1. **Pré-requisito:** Certifique-se de ter o app **Dispositivos Apple (Apple Devices)** (da Microsoft Store) ou o **iTunes** instalado para que o Windows possua os drivers USB oficiais da Apple.
-2. Baixe o arquivo **`FakeGPS-iPhone-Windows.zip`** na aba [Releases](https://github.com/maxxcleiton/fakegps-iphone-web/releases).
-3. Extraia o ZIP e dê dois cliques no arquivo **`start.bat`**.
-   * Ele configurará o ambiente virtual automaticamente e abrirá o navegador em `http://localhost:8765`.
 
 ---
 

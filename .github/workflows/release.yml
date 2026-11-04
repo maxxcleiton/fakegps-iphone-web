@@ -6,40 +6,85 @@ on:
       - 'v*'
 
 jobs:
-  release:
-    name: Build & Release Multiplatform
+  build-linux-mac:
+    name: Build Linux & macOS Packages
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Build Debian/Ubuntu package (.deb)
         run: |
           chmod +x build-deb.sh
           ./build-deb.sh
 
-      - name: Package Windows distribution (.zip)
+      - name: Package Windows portable (.zip)
         run: |
           mkdir -p dist-windows
-          cp server.py index.html requirements.txt start.bat README.md README.pt-BR.md fakegps-iphone.svg dist-windows/
+          cp server.py index.html requirements.txt start.bat README.md README.pt-BR.md fakegps-iphone.svg fakegps-iphone.ico screenshot.png dist-windows/
           cd dist-windows && zip -r ../FakeGPS-iPhone-Windows.zip . && cd ..
 
-      - name: Package macOS distribution (.zip)
+      - name: Package macOS portable (.zip)
         run: |
           mkdir -p dist-macos
-          cp server.py index.html requirements.txt start-mac.sh README.md README.pt-BR.md fakegps-iphone.svg dist-macos/
+          cp server.py index.html requirements.txt start-mac.sh README.md README.pt-BR.md fakegps-iphone.svg screenshot.png dist-macos/
           chmod +x dist-macos/start-mac.sh
           cd dist-macos && zip -r ../FakeGPS-iPhone-macOS.zip . && cd ..
+
+      - name: Upload Linux & Mac artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-mac-assets
+          path: |
+            fakegps-iphone_*.deb
+            FakeGPS-iPhone-Windows.zip
+            FakeGPS-iPhone-macOS.zip
+
+  build-windows-exe:
+    name: Build Windows Standalone .exe
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies & PyInstaller
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build Windows .exe with PyInstaller
+        run: |
+          pyinstaller --noconfirm --onefile --name "FakeGPS-iPhone" --add-data "index.html;." --icon "fakegps-iphone.ico" server.py
+
+      - name: Upload Windows exe artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-exe-asset
+          path: dist/FakeGPS-iPhone.exe
+
+  publish-release:
+    name: Publish GitHub Release
+    needs: [build-linux-mac, build-windows-exe]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            fakegps-iphone_*.deb
-            FakeGPS-iPhone-Windows.zip
-            FakeGPS-iPhone-macOS.zip
+          files: release-assets/*
           generate_release_notes: true
           draft: false
           prerelease: false
