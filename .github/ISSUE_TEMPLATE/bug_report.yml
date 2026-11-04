@@ -1,0 +1,35 @@
+name: Bug report
+description: Crie um relatório de erro para ajudar a melhorar o FakeGPS iPhone
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Obrigado por relatar o problema! Por favor, preencha as informações abaixo.
+  - type: input
+    id: os
+    attributes:
+      label: Sistema Operacional
+      description: Qual sistema e versão você está usando? (Ex: Xubuntu 24.04, Windows 11, macOS Sequoia)
+    validations:
+      required: true
+  - type: input
+    id: ios_version
+    attributes:
+      label: Versão do iOS e Modelo do iPhone
+      description: Ex: iPhone 12 Pro Max, iOS 17.5 ou iOS 26.6.1
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Descrição do Erro
+      description: O que aconteceu de errado?
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs do Terminal / Console
+      description: Cole a saída do terminal aqui (se houver).
+      render: shell

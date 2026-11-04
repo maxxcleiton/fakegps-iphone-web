@@ -1,45 +1,56 @@
 #!/usr/bin/env bash
-# FakeGPS iPhone — script de inicialização
+# FakeGPS iPhone — Launcher para Linux
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VENV="$SCRIPT_DIR/.venv"
-PYTHON="$VENV/bin/python3"
 PORT="${PORT:-8765}"
+URL="http://localhost:$PORT"
 
 echo ""
 echo "╔══════════════════════════════════════╗"
-echo "║      FakeGPS iPhone — Iniciando      ║"
+echo "║       FakeGPS iPhone — Linux         ║"
 echo "╚══════════════════════════════════════╝"
 echo ""
 
-# Verifica venv
-if [ ! -f "$PYTHON" ]; then
-  echo "❌ Ambiente virtual não encontrado em $VENV"
-  echo "   Execute: python3 -m venv .venv --without-pip && .venv/bin/python3 /tmp/get-pip.py && .venv/bin/pip install pymobiledevice3 fastapi uvicorn"
+# 1. Verifica Python 3
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "❌ Python 3 não encontrado!"
+  echo "   Instale via: sudo apt install python3 python3-venv"
   exit 1
 fi
 
-# Verifica pymobiledevice3
-if ! "$PYTHON" -c "import pymobiledevice3" 2>/dev/null; then
-  echo "❌ pymobiledevice3 não instalado. Execute:"
-  echo "   $VENV/bin/pip install pymobiledevice3 fastapi uvicorn"
-  exit 1
+# 2. Cria venv se não existir
+if [ ! -d "$VENV" ]; then
+  echo "==> Criando ambiente virtual em $VENV..."
+  python3 -m venv "$VENV" || python3 -m venv "$VENV" --without-pip
+  if [ ! -f "$VENV/bin/pip" ]; then
+    echo "==> Instalando pip no ambiente virtual..."
+    curl -sS https://bootstrap.pypa.io/get-pip.py -o /tmp/get-pip.py
+    "$VENV/bin/python3" /tmp/get-pip.py
+  fi
 fi
 
-# Verifica usbmuxd
-if ! pgrep -x usbmuxd > /dev/null; then
-  echo "⚠️  usbmuxd não está rodando. Iniciando..."
-  sudo usbmuxd || echo "   (Pode precisar de sudo)"
+# 3. Instala dependências
+if ! "$VENV/bin/python3" -c "import pymobiledevice3, fastapi, uvicorn" >/dev/null 2>&1; then
+  echo "==> Instalando dependências..."
+  "$VENV/bin/python3" -m pip install --upgrade pip >/dev/null 2>&1 || true
+  "$VENV/bin/pip" install -r "$SCRIPT_DIR/requirements.txt"
 fi
 
-echo "🌐 Abrindo interface em http://localhost:$PORT"
+# 4. Verifica usbmuxd
+if ! pgrep -x usbmuxd >/dev/null 2>&1; then
+  echo "⚠️  usbmuxd não está em execução. Tentando iniciar..."
+  sudo usbmuxd 2>/dev/null || usbmuxd 2>/dev/null || true
+fi
+
+echo "🌐 Abrindo interface em $URL"
 echo "   Conecte o iPhone via USB antes de usar."
 echo "   Pressione Ctrl+C para encerrar."
 echo ""
 
-# Abre navegador automaticamente após 2s (em background)
-(sleep 2 && xdg-open "http://localhost:$PORT" 2>/dev/null || true) &
+# 5. Abre navegador após 2 segundos
+(sleep 2 && xdg-open "$URL" 2>/dev/null || true) &
 
-# Inicia servidor
-PORT="$PORT" "$PYTHON" "$SCRIPT_DIR/server.py"
+# 6. Inicia servidor
+exec "$VENV/bin/python3" "$SCRIPT_DIR/server.py"

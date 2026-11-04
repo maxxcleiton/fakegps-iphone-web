@@ -7,23 +7,39 @@ on:
 
 jobs:
   release:
-    name: Build & Release
+    name: Build & Release Multiplatform
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Build .deb package
+      - name: Build Debian/Ubuntu package (.deb)
         run: |
           chmod +x build-deb.sh
           ./build-deb.sh
 
-      - name: Publish Release
+      - name: Package Windows distribution (.zip)
+        run: |
+          mkdir -p dist-windows
+          cp server.py index.html requirements.txt start.bat README.md README.pt-BR.md fakegps-iphone.svg dist-windows/
+          cd dist-windows && zip -r ../FakeGPS-iPhone-Windows.zip . && cd ..
+
+      - name: Package macOS distribution (.zip)
+        run: |
+          mkdir -p dist-macos
+          cp server.py index.html requirements.txt start-mac.sh README.md README.pt-BR.md fakegps-iphone.svg dist-macos/
+          chmod +x dist-macos/start-mac.sh
+          cd dist-macos && zip -r ../FakeGPS-iPhone-macOS.zip . && cd ..
+
+      - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: fakegps-iphone_*.deb
+          files: |
+            fakegps-iphone_*.deb
+            FakeGPS-iPhone-Windows.zip
+            FakeGPS-iPhone-macOS.zip
           generate_release_notes: true
           draft: false
           prerelease: false
