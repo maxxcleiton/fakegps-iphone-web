@@ -7,6 +7,8 @@ Conexão persistente direta via API Python (pymobiledevice3)
 import asyncio
 import logging
 import os
+import sys
+import webbrowser
 from contextlib import AsyncExitStack, asynccontextmanager
 from pathlib import Path
 from typing import Optional
@@ -237,8 +239,6 @@ async def lifespan(app: FastAPI):
 
     # Se executado como .exe compilado (PyInstaller), abre o navegador automaticamente
     if getattr(sys, "frozen", False):
-        import webbrowser
-
         async def _open_browser():
             await asyncio.sleep(1.2)
             webbrowser.open("http://localhost:8765")
