@@ -214,8 +214,9 @@ class LocationManager:
                 if self.is_simulator:
                     log.info("Enviando coordenadas para o Simulador iOS: %.6f, %.6f", lat, lng)
                     target = self.serial if self.serial else "booted"
+                    coords = f"{lat:.6f},{lng:.6f}"
                     proc = await asyncio.create_subprocess_exec(
-                        "xcrun", "simctl", "location", target, "set", str(lat), str(lng),
+                        "xcrun", "simctl", "location", target, "set", coords,
                         stdout=asyncio.subprocess.PIPE,
                         stderr=asyncio.subprocess.PIPE,
                     )

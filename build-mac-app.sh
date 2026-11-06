@@ -39,10 +39,12 @@ cat > "$APP_BUNDLE/Contents/Info.plist" << 'EOF'
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.0.6</string>
+    <string>1.0.8</string>
     <key>LSMinimumSystemVersion</key>
     <string>10.15</string>
     <key>NSHighResolutionCapable</key>
+    <true/>
+    <key>LSUIElement</key>
     <true/>
 </dict>
 </plist>
@@ -53,13 +55,29 @@ cat > "$APP_BUNDLE/Contents/MacOS/FakeGPS-iPhone" << 'EOF'
 #!/usr/bin/env bash
 set -e
 
+export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
+
 APP_DIR="$(cd "$(dirname "$0")/../Resources/app" && pwd)"
-DATA_DIR="$HOME/Library/Application Support/FakeGPS-iPhone"
-VENV="$DATA_DIR/.venv"
+BUNDLE_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
+PARENT_DIR="$(cd "$BUNDLE_DIR/.." && pwd)"
+LOG_FILE="$HOME/Library/Logs/FakeGPS-iPhone.log"
+mkdir -p "$HOME/Library/Logs"
+
+exec >> "$LOG_FILE" 2>&1
+
+# Se já existir venv na pasta pai (onde o usuário extraiu o zip), usa ela diretamente!
+if [ -d "$PARENT_DIR/.venv" ]; then
+  VENV="$PARENT_DIR/.venv"
+elif [ -d "$APP_DIR/../../.venv" ]; then
+  VENV="$APP_DIR/../../.venv"
+else
+  DATA_DIR="$HOME/Library/Application Support/FakeGPS-iPhone"
+  mkdir -p "$DATA_DIR"
+  VENV="$DATA_DIR/.venv"
+fi
+
 PORT="${PORT:-8765}"
 URL="http://localhost:$PORT"
-
-mkdir -p "$DATA_DIR"
 
 # Se o servidor já estiver em execução, apenas abre o navegador
 if curl -s --connect-timeout 1 "$URL/api/status" >/dev/null 2>&1; then
@@ -73,7 +91,7 @@ if ! command -v python3 >/dev/null 2>&1; then
   exit 1
 fi
 
-# Cria venv na pasta de suporte do usuário se necessário
+# Cria venv se necessário
 if [ ! -d "$VENV" ]; then
   python3 -m venv "$VENV"
 fi
@@ -81,7 +99,7 @@ fi
 # Instala dependências se necessário
 if ! "$VENV/bin/python3" -c "import pymobiledevice3, fastapi, uvicorn" >/dev/null 2>&1; then
   "$VENV/bin/python3" -m pip install --upgrade pip >/dev/null 2>&1 || true
-  "$VENV/bin/pip" install -r "$APP_DIR/requirements.txt" >/dev/null 2>&1
+  "$VENV/bin/pip" install -r "$APP_DIR/requirements.txt"
 fi
 
 # Abre o navegador padrão do macOS
