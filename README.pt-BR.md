@@ -76,12 +76,12 @@
 
 No Mac, o FakeGPS funciona tanto com **iPhone físico via cabo USB** quanto com o **Simulador do Xcode** aberto na tela!
 
-#### Como Iniciar:
+#### Como Iniciar no Mac:
 1. Baixe o arquivo **`FakeGPS-iPhone-macOS.zip`** na aba [Releases](https://github.com/maxxcleiton/fakegps-iphone-web/releases) (ou clone o repositório).
-2. Extraia o ZIP e execute no Terminal:
-   ```bash
-   ./start-mac.sh
-   ```
+2. Extraia o ZIP. Você tem **3 formas práticas de abrir**:
+   * **Opção 1 (Aplicativo Nativo com Ícone):** Dê dois cliques em **`FakeGPS iPhone.app`** *(você pode arrastar para a pasta **Aplicativos** ou fixar no Dock do Mac!)*
+   * **Opção 2 (Dois cliques no Finder):** Dê dois cliques no arquivo **`FakeGPS.command`** *(executa direto sem precisar abrir terminal)*
+   * **Opção 3 (Terminal):** Execute `./start-mac.sh`
 3. O navegador abrirá automaticamente em `http://localhost:8765`.
 
 #### 📱 Usando com o Simulador do Xcode (iOS Simulator):

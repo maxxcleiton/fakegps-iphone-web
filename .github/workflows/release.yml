@@ -26,9 +26,11 @@ jobs:
       - name: Package macOS portable (.zip)
         run: |
           mkdir -p dist-macos
-          cp server.py index.html requirements.txt start-mac.sh README.md README.pt-BR.md fakegps-iphone.svg screenshot.png dist-macos/
-          chmod +x dist-macos/start-mac.sh
-          cd dist-macos && zip -r ../FakeGPS-iPhone-macOS.zip . && cd ..
+          chmod +x build-mac-app.sh
+          ./build-mac-app.sh dist-macos
+          cp server.py index.html requirements.txt start-mac.sh FakeGPS.command README.md README.pt-BR.md fakegps-iphone.svg fakegps-iphone.icns screenshot.png dist-macos/
+          chmod +x dist-macos/start-mac.sh dist-macos/FakeGPS.command
+          cd dist-macos && zip -r -y ../FakeGPS-iPhone-macOS.zip . && cd ..
 
       - name: Upload Linux & Mac artifacts
         uses: actions/upload-artifact@v4
