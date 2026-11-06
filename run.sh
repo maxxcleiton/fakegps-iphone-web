@@ -15,7 +15,7 @@ URL="http://localhost:$PORT"
 # 1. Verifica se usbmuxd está rodando
 if ! pgrep -x usbmuxd >/dev/null 2>&1; then
   echo "==> Iniciando usbmuxd..."
-  sudo usbmuxd 2>/dev/null || usbmuxd 2>/dev/null || true
+  sudo systemctl start usbmuxd 2>/dev/null || sudo usbmuxd 2>/dev/null || usbmuxd 2>/dev/null || true
 fi
 
 # 2. Se o servidor já estiver rodando, só abre o navegador

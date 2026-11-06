@@ -39,9 +39,9 @@
 
 ---
 
-### 🐧 Linux (Ubuntu, Xubuntu, Debian, Mint)
+### 🐧 Linux
 
-#### Opção A: Instalar Pacote `.deb` (Recomendado)
+#### Opção A: Debian, Ubuntu, Xubuntu, Linux Mint (.deb)
 1. Baixe o pacote **`fakegps-iphone_*_all.deb`** na aba [Releases](https://github.com/maxxcleiton/fakegps-iphone-web/releases).
 2. Instale no terminal:
    ```bash
@@ -49,12 +49,24 @@
    ```
 3. Abra pelo menu de aplicativos (**FakeGPS iPhone**) ou digite `fakegps-iphone` no terminal.
 
-#### Opção B: Rodar direto da pasta
-```bash
-git clone https://github.com/maxxcleiton/fakegps-iphone-web.git
-cd fakegps-iphone-web
-./start.sh
-```
+#### Opção B: Rocky Linux, Fedora, RHEL, Arch ou direto do código
+1. Instale os pré-requisitos:
+   * **Rocky Linux / RHEL / Fedora:**
+     ```bash
+     sudo dnf install -y python3 python3-pip git usbmuxd libimobiledevice
+     sudo systemctl enable --now usbmuxd
+     ```
+   * **Arch Linux / Manjaro:**
+     ```bash
+     sudo pacman -S python python-pip git usbmuxd libimobiledevice
+     sudo systemctl enable --now usbmuxd
+     ```
+2. Clone e inicie:
+   ```bash
+   git clone https://github.com/maxxcleiton/fakegps-iphone-web.git
+   cd fakegps-iphone-web
+   ./start.sh
+   ```
 
 ---
 

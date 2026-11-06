@@ -4,8 +4,9 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VENV="$SCRIPT_DIR/.venv"
+HOST="${HOST:-localhost}"
 PORT="${PORT:-8765}"
-URL="http://localhost:$PORT"
+URL="http://$HOST:$PORT"
 
 echo ""
 echo "╔══════════════════════════════════════╗"
@@ -16,7 +17,8 @@ echo ""
 # 1. Verifica Python 3
 if ! command -v python3 >/dev/null 2>&1; then
   echo "❌ Python 3 não encontrado!"
-  echo "   Instale via: sudo apt install python3 python3-venv"
+  echo "   Debian/Ubuntu:    sudo apt install python3 python3-venv usbmuxd"
+  echo "   Rocky/RHEL/Fedora: sudo dnf install python3 python3-pip usbmuxd"
   exit 1
 fi
 
@@ -41,7 +43,7 @@ fi
 # 4. Verifica usbmuxd
 if ! pgrep -x usbmuxd >/dev/null 2>&1; then
   echo "⚠️  usbmuxd não está em execução. Tentando iniciar..."
-  sudo usbmuxd 2>/dev/null || usbmuxd 2>/dev/null || true
+  sudo systemctl start usbmuxd 2>/dev/null || sudo usbmuxd 2>/dev/null || usbmuxd 2>/dev/null || true
 fi
 
 echo "🌐 Abrindo interface em $URL"
