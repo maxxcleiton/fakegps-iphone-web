@@ -3,7 +3,7 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-VERSION="1.0.8"
+VERSION="1.0.9"
 PKG_NAME="fakegps-iphone_${VERSION}_all"
 BUILD_DIR="$SCRIPT_DIR/build_deb/$PKG_NAME"
 

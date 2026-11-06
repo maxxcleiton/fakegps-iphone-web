@@ -28,8 +28,8 @@ fi
 
 # 3. Instala dependências
 echo "==> Verificando dependências..."
-"$VENV/bin/python3" -m pip install --upgrade pip >/dev/null 2>&1 || true
-"$VENV/bin/pip" install -r "$SCRIPT_DIR/requirements.txt" >/dev/null 2>&1
+"$VENV/bin/python3" -m pip install --upgrade pip setuptools wheel >/dev/null 2>&1 || true
+"$VENV/bin/pip" install --prefer-binary -r "$SCRIPT_DIR/requirements.txt" >/dev/null 2>&1
 
 echo ""
 echo "🌐 Abrindo interface em $URL"

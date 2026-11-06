@@ -98,8 +98,8 @@ fi
 
 # Instala dependências se necessário
 if ! "$VENV/bin/python3" -c "import pymobiledevice3, fastapi, uvicorn" >/dev/null 2>&1; then
-  "$VENV/bin/python3" -m pip install --upgrade pip >/dev/null 2>&1 || true
-  "$VENV/bin/pip" install -r "$APP_DIR/requirements.txt"
+  "$VENV/bin/python3" -m pip install --upgrade pip setuptools wheel >/dev/null 2>&1 || true
+  "$VENV/bin/pip" install --prefer-binary -r "$APP_DIR/requirements.txt"
 fi
 
 # Abre o navegador padrão do macOS
