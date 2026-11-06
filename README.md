@@ -24,6 +24,7 @@
 * **Persistent Session:** Coordinates remain fixed on the iPhone until you click "Restore Real GPS".
 * **One-Click Server Shutdown:** Includes a dedicated **"⏹ Desligar"** (Stop) button in the header to cleanly terminate the server from the browser.
 * **Standalone Windows `.exe`:** No Python installation needed on Windows—just download and double-click!
+* **Xcode Simulator Support (macOS):** In addition to physical iPhones connected via USB, automatically detects and controls running **iOS Simulators** in Xcode with 1-click on the map, eliminating manual coordinate typing in GPX files or Xcode's Custom Location prompt!
 
 ---
 
@@ -53,6 +54,7 @@
 1. Install prerequisites:
    * **Rocky Linux / RHEL / Fedora:**
      ```bash
+     sudo dnf install -y epel-release && sudo crb enable
      sudo dnf install -y python3 python3-pip git usbmuxd libimobiledevice
      sudo systemctl enable --now usbmuxd
      ```
@@ -70,14 +72,24 @@
 
 ---
 
-### 🍎 macOS
+### 🍎 macOS (Physical iPhone or Xcode Simulator)
 
+On Mac, FakeGPS seamlessly works with both **physical iPhones via USB** and the **Xcode iOS Simulator**!
+
+#### How to Launch:
 1. Download **`FakeGPS-iPhone-macOS.zip`** from [Releases](https://github.com/maxxcleiton/fakegps-iphone-web/releases) (or clone the repository).
 2. Extract the ZIP and run in Terminal:
    ```bash
    ./start-mac.sh
    ```
-   *(macOS has native Apple USB communication services built-in; no extra drivers required!)*
+3. Your browser will open automatically at `http://localhost:8765`.
+
+#### 📱 Using with Xcode Simulator (iOS Simulator):
+- **The Xcode Hassle:** By default, changing coordinates in Apple's Simulator requires going to `Features > Location > Custom Location...` and manually typing latitude/longitude decimal digits every time, with no visual map or address search.
+- **With FakeGPS:** Just keep your Simulator open (`booted`). FakeGPS automatically detects it! Search any address or click anywhere on the interactive map to teleport the Simulator immediately.
+
+#### 🔌 Using with Physical iPhone via USB:
+- Simply plug your iPhone in via USB, tap "Trust This Computer", and spoof as usual. *(macOS natively includes Apple's USB communication drivers).*
 
 ---
 

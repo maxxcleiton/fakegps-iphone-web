@@ -24,6 +24,7 @@
 * **Sessão Persistente:** Fixa a coordenada simulada no aparelho para que o iOS não restaure o GPS real sozinho.
 * **Botão Desligar:** Botão **"⏹ Desligar"** no cabeçalho para finalizar o servidor em segundo plano diretamente pelo navegador.
 * **Executável `.exe` para Windows:** Não precisa de Python instalado no Windows—basta baixar e dar dois cliques!
+* **Suporte ao Simulador do Xcode (macOS):** Além de iPhones físicos na USB, detecta e altera a localização do **iOS Simulator** do Xcode na hora, eliminando a chatice de digitar coordenadas em arquivos GPX ou na janela Custom Location da Apple.
 
 ---
 
@@ -53,6 +54,7 @@
 1. Instale os pré-requisitos:
    * **Rocky Linux / RHEL / Fedora:**
      ```bash
+     sudo dnf install -y epel-release && sudo crb enable
      sudo dnf install -y python3 python3-pip git usbmuxd libimobiledevice
      sudo systemctl enable --now usbmuxd
      ```
@@ -70,14 +72,24 @@
 
 ---
 
-### 🍎 macOS
+### 🍎 macOS (iPhone Físico ou Simulador do Xcode)
 
-1. Baixe o arquivo **`FakeGPS-iPhone-macOS.zip`** na aba [Releases](https://github.com/maxxcleiton/fakegps-iphone-web/releases).
+No Mac, o FakeGPS funciona tanto com **iPhone físico via cabo USB** quanto com o **Simulador do Xcode** aberto na tela!
+
+#### Como Iniciar:
+1. Baixe o arquivo **`FakeGPS-iPhone-macOS.zip`** na aba [Releases](https://github.com/maxxcleiton/fakegps-iphone-web/releases) (ou clone o repositório).
 2. Extraia o ZIP e execute no Terminal:
    ```bash
    ./start-mac.sh
    ```
-   *(O macOS já possui os serviços de comunicação USB da Apple integrados nativamente no sistema).*
+3. O navegador abrirá automaticamente em `http://localhost:8765`.
+
+#### 📱 Usando com o Simulador do Xcode (iOS Simulator):
+- **O problema nativo do Xcode:** Por padrão, para mudar a localização no Simulador da Apple você precisa ir em `Features > Location > Custom Location` e digitar números de latitude e longitude manualmente toda hora, sem mapa e sem busca de endereços.
+- **Com o FakeGPS:** Deixe o Simulador do Xcode aberto (`booted`). O FakeGPS detecta o simulador automaticamente! Basta pesquisar um endereço ou clicar em qualquer ponto do mapa para o Simulador atualizar a posição instantaneamente.
+
+#### 🔌 Usando com iPhone Físico na USB:
+- Basta plugar o iPhone no cabo USB, tocar em "Confiar neste Computador" e usar normalmente *(o macOS já possui os drivers de comunicação USB da Apple integrados nativamente no sistema)*.
 
 ---
 

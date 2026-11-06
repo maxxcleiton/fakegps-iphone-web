@@ -7,6 +7,8 @@ Conexão persistente direta via API Python (pymobiledevice3)
 import asyncio
 import logging
 import os
+import re
+import shutil
 import sys
 import webbrowser
 from contextlib import AsyncExitStack, asynccontextmanager
@@ -64,68 +66,117 @@ class LocationManager:
         self.serial: Optional[str] = None
         self.device_name: str = "iPhone"
         self.ios_version: str = ""
+        self.is_simulator: bool = False
         self.status: str = "disconnected"  # disconnected | connected | simulating | error
-        self.status_msg: str = "Aguardando iPhone via cabo USB..."
+        self.status_msg: str = "Aguardando dispositivo..."
         self.current_lat: Optional[float] = None
         self.current_lng: Optional[float] = None
 
-    async def detect_device(self):
-        """Verifica se há um iPhone plugado via USB."""
+    async def detect_simulator(self) -> Optional[tuple[str, str]]:
+        """Verifica se há um Simulador do Xcode aberto no macOS (status Booted)."""
+        if sys.platform != "darwin" or not shutil.which("xcrun"):
+            return None
         try:
-            devices = await select_devices_by_connection_type(connection_type="USB")
-            if not devices:
-                if self.status != "disconnected":
-                    log.info("iPhone desconectado da USB.")
-                    await self._reset_internal(clean=False)
-                self.status = "disconnected"
-                self.status_msg = "Nenhum iPhone conectado na USB."
+            proc = await asyncio.create_subprocess_exec(
+                "xcrun", "simctl", "list", "devices", "booted",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, _ = await proc.communicate()
+            if proc.returncode != 0:
                 return None
 
-            device = devices[0]
-            self.serial = device.serial
-
-            if self.status == "disconnected" or not self.ios_version:
-                try:
-                    ld = await create_using_usbmux(serial=self.serial)
-                    raw_type = getattr(ld, "product_type", "iPhone")
-                    self.device_name = MODEL_NAMES.get(raw_type, raw_type)
-                    self.ios_version = str(getattr(ld, "product_version", ""))
-                    if self.status != "simulating":
-                        self.status = "connected"
-                        self.status_msg = f"{self.device_name} (iOS {self.ios_version}) Conectado"
-                    log.info(
-                        "Dispositivo detectado: %s (iOS %s) [%s]",
-                        self.device_name,
-                        self.ios_version,
-                        self.serial,
-                    )
-                except Exception as e:
-                    log.warning("Falha ao ler lockdown info: %s", e)
-                    self.status = "connected"
-                    self.status_msg = "iPhone Conectado (aguardando liberação de tela/confirmação)"
-
-            return device
+            output = stdout.decode("utf-8", errors="replace")
+            for line in output.splitlines():
+                line = line.strip()
+                if "(Booted)" in line:
+                    m = re.match(r"^(.*?)\s*\(([A-F0-9\-]+)\)\s*\(Booted\)", line, re.IGNORECASE)
+                    if m:
+                        name = m.group(1).strip()
+                        udid = m.group(2).strip()
+                        return (name, udid)
+                    return ("iPhone", "booted")
         except Exception as e:
-            log.error("Erro ao verificar USB: %s", e)
-            self.status = "error"
-            self.status_msg = f"Erro USB: {e}"
-            return None
+            log.debug("Erro ao verificar simulador: %s", e)
+        return None
+
+    async def detect_device(self):
+        """Verifica se há um iPhone físico via USB ou Simulador do Xcode (macOS)."""
+        # 1. Tenta detectar iPhone físico na USB
+        try:
+            devices = await select_devices_by_connection_type(connection_type="USB")
+            if devices:
+                device = devices[0]
+                self.is_simulator = False
+                self.serial = device.serial
+
+                if self.status == "disconnected" or not self.ios_version or self.is_simulator:
+                    try:
+                        ld = await create_using_usbmux(serial=self.serial)
+                        raw_type = getattr(ld, "product_type", "iPhone")
+                        self.device_name = MODEL_NAMES.get(raw_type, raw_type)
+                        self.ios_version = str(getattr(ld, "product_version", ""))
+                        if self.status != "simulating":
+                            self.status = "connected"
+                            self.status_msg = f"{self.device_name} (iOS {self.ios_version}) Conectado via USB"
+                        log.info(
+                            "Dispositivo USB detectado: %s (iOS %s) [%s]",
+                            self.device_name,
+                            self.ios_version,
+                            self.serial,
+                        )
+                    except Exception as e:
+                        log.warning("Falha ao ler lockdown info: %s", e)
+                        self.status = "connected"
+                        self.status_msg = "iPhone Conectado via USB (aguardando liberação de tela)"
+                return device
+        except Exception as e:
+            log.debug("Erro ao verificar USB: %s", e)
+
+        # 2. Se no macOS, tenta detectar Simulador do Xcode aberto
+        sim_info = await self.detect_simulator()
+        if sim_info:
+            sim_name, sim_udid = sim_info
+            self.is_simulator = True
+            self.serial = sim_udid
+            self.device_name = f"{sim_name} (Simulador)"
+            self.ios_version = "Simulator"
+            if self.status != "simulating":
+                self.status = "connected"
+                self.status_msg = f"{self.device_name} Conectado"
+            return "simulator"
+
+        # 3. Nenhum dispositivo encontrado
+        if self.status != "disconnected":
+            log.info("Dispositivo desconectado.")
+            await self._reset_internal(clean=False)
+        self.status = "disconnected"
+        if sys.platform == "darwin":
+            self.status_msg = "Aguardando iPhone via USB ou Simulador do Xcode aberto..."
+        else:
+            self.status_msg = "Nenhum iPhone conectado na USB."
+        return None
 
     async def ensure_connected(self):
-        """Garante que a sessão DVT de simulação está aberta e ativa."""
+        """Garante que a sessão de simulação está pronta."""
+        if self.is_simulator:
+            return
+
         if self.loc_sim is not None:
             return
 
         device = await self.detect_device()
+        if self.is_simulator:
+            return
+
         if not device or not self.serial:
-            raise RuntimeError("Nenhum iPhone detectado via USB. Conecte o cabo e clique em 'Confiar'.")
+            raise RuntimeError("Nenhum iPhone detectado via USB ou Simulador aberto.")
 
         log.info("Iniciando sessão DVT com o iPhone %s...", self.serial)
         self.status_msg = "Iniciando sessão de GPS simulado..."
 
         new_stack = AsyncExitStack()
         try:
-            # Identifica a versão do iOS para escolher a rota correta
             major = 17
             if self.ios_version:
                 try:
@@ -154,11 +205,34 @@ class LocationManager:
             raise
 
     async def set_location(self, lat: float, lng: float):
-        """Aplica a coordenada e MANTÉM a sessão aberta para o iOS não reverter."""
+        """Aplica a coordenada no iPhone físico ou no Simulador do Xcode."""
         async with self.lock:
             try:
                 await self.ensure_connected()
-                log.info("Enviando coordenadas para o iPhone: %.6f, %.6f", lat, lng)
+
+                # Simulador do Xcode no macOS
+                if self.is_simulator:
+                    log.info("Enviando coordenadas para o Simulador iOS: %.6f, %.6f", lat, lng)
+                    target = self.serial if self.serial else "booted"
+                    proc = await asyncio.create_subprocess_exec(
+                        "xcrun", "simctl", "location", target, "set", str(lat), str(lng),
+                        stdout=asyncio.subprocess.PIPE,
+                        stderr=asyncio.subprocess.PIPE,
+                    )
+                    stdout, stderr = await proc.communicate()
+                    if proc.returncode != 0:
+                        err_msg = stderr.decode("utf-8", errors="replace").strip()
+                        raise RuntimeError(f"Falha no xcrun simctl: {err_msg}")
+
+                    self.current_lat = lat
+                    self.current_lng = lng
+                    self.status = "simulating"
+                    self.status_msg = f"GPS Simulado: {lat:.5f}, {lng:.5f}"
+                    log.info("Localização do Simulador fixada com sucesso!")
+                    return
+
+                # iPhone físico USB
+                log.info("Enviando coordenadas para o iPhone USB: %.6f, %.6f", lat, lng)
                 await self.loc_sim.set(lat, lng)
 
                 self.current_lat = lat
@@ -168,14 +242,26 @@ class LocationManager:
                 log.info("Localização fixada com sucesso!")
             except Exception as e:
                 log.exception("Erro ao aplicar localização")
-                # Se a sessão caiu, reseta para a próxima tentativa reconectar do zero
-                await self._reset_internal(clean=False)
-                raise RuntimeError(f"Falha ao enviar coordenada ao iPhone: {e}")
+                if not self.is_simulator:
+                    await self._reset_internal(clean=False)
+                raise RuntimeError(f"Falha ao enviar coordenada: {e}")
 
     async def clear_location(self):
-        """Restaura o GPS real do aparelho."""
+        """Restaura o GPS real do aparelho ou limpa o simulador."""
         async with self.lock:
-            if self.loc_sim is not None:
+            if self.is_simulator:
+                try:
+                    log.info("Limpando simulação de localização no Simulador Xcode...")
+                    target = self.serial if self.serial else "booted"
+                    proc = await asyncio.create_subprocess_exec(
+                        "xcrun", "simctl", "location", target, "clear",
+                        stdout=asyncio.subprocess.PIPE,
+                        stderr=asyncio.subprocess.PIPE,
+                    )
+                    await proc.communicate()
+                except Exception as e:
+                    log.warning("Erro ao limpar localização no simulador: %s", e)
+            elif self.loc_sim is not None:
                 try:
                     log.info("Limpando simulação de localização...")
                     await self.loc_sim.clear()
@@ -185,16 +271,27 @@ class LocationManager:
             self.current_lat = None
             self.current_lng = None
             self.status = "connected"
-            self.status_msg = f"{self.device_name} Conectado (GPS Real)"
-            log.info("GPS restaurado para localização real.")
+            self.status_msg = f"{self.device_name} Conectado (GPS Restaurado)"
+            log.info("GPS restaurado.")
 
     async def disconnect(self):
-        """Encerra a sessão DVT de forma limpa."""
+        """Encerra a sessão de forma limpa."""
         async with self.lock:
             await self._reset_internal(clean=True)
 
     async def _reset_internal(self, clean: bool = True):
-        if self.loc_sim and clean:
+        if self.is_simulator and clean:
+            try:
+                target = self.serial if self.serial else "booted"
+                proc = await asyncio.create_subprocess_exec(
+                    "xcrun", "simctl", "location", target, "clear",
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                await proc.communicate()
+            except Exception:
+                pass
+        elif self.loc_sim and clean:
             try:
                 await self.loc_sim.clear()
             except Exception:
@@ -208,6 +305,7 @@ class LocationManager:
         self.loc_sim = None
         self.current_lat = None
         self.current_lng = None
+        self.is_simulator = False
         self.status = "disconnected"
 
 
@@ -265,6 +363,7 @@ async def api_status():
         "message": manager.status_msg,
         "device_name": manager.device_name,
         "ios_version": manager.ios_version,
+        "is_simulator": manager.is_simulator,
         "current_lat": manager.current_lat,
         "current_lng": manager.current_lng,
     }

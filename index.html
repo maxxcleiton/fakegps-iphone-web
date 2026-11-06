@@ -626,7 +626,14 @@ function updateStatusUI(d) {
 
   dot.className = 'status-dot ' + d.status;
 
-  const deviceLabel = d.device_name ? `${d.device_name} (iOS ${d.ios_version})` : 'iPhone';
+  let deviceLabel = 'iPhone';
+  if (d.device_name) {
+    if (d.ios_version && d.ios_version !== 'Simulator') {
+      deviceLabel = `${d.device_name} (iOS ${d.ios_version})`;
+    } else {
+      deviceLabel = d.device_name;
+    }
+  }
   const statusMap = {
     disconnected: 'Desconectado',
     connecting:   'Conectando...',
