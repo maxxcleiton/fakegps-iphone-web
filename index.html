@@ -264,6 +264,23 @@
   #active-location.show { display: flex; }
   #active-location .loc-title { font-weight: 600; font-size: 12px; color: #4ade80; }
 
+  .keepalive-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: #9ca3af;
+    cursor: pointer;
+    user-select: none;
+    padding: 2px 0;
+  }
+  .keepalive-toggle input[type="checkbox"] {
+    width: 15px;
+    height: 15px;
+    accent-color: #22c55e;
+    cursor: pointer;
+  }
+
   /* Map */
   #map {
     flex: 1;
@@ -370,11 +387,16 @@
       <span class="loc-title">📡 GPS Simulado Ativo</span>
       <span id="active-coords"></span>
       <span id="active-name" style="font-size:12px; color:#4ade80; opacity:.8"></span>
+      <span id="active-keepalive" style="font-size:11px; color:#86efac; opacity:.85"></span>
     </div>
 
     <hr>
 
     <!-- Ações -->
+    <label class="keepalive-toggle" for="keep-alive-toggle">
+      <input type="checkbox" id="keep-alive-toggle" checked onchange="toggleKeepAlive(this.checked)">
+      <span>Manter GPS atualizado (reenvio 2s)</span>
+    </label>
     <button class="btn btn-apply" id="btn-apply" onclick="applyLocation()">
       Aplicar no iPhone
     </button>
@@ -538,9 +560,12 @@ document.addEventListener('click', (e) => {
 });
 
 // ─── API calls ───────────────────────────────────────────────────
+let pendingKeepAliveToggle = false;
+
 async function applyLocation() {
   const lat = parseFloat(document.getElementById('lat-input').value);
   const lng = parseFloat(document.getElementById('lng-input').value);
+  const keep_alive = document.getElementById('keep-alive-toggle').checked;
 
   if (isNaN(lat) || isNaN(lng)) {
     toast('Selecione um local no mapa ou informe as coordenadas.', 'err');
@@ -556,16 +581,41 @@ async function applyLocation() {
     const r = await fetch('/api/location', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ lat, lng }),
+      body: JSON.stringify({ lat, lng, keep_alive }),
     });
     const d = await r.json();
     if (!r.ok) throw new Error(d.detail || 'Erro desconhecido');
     toast(`✅ GPS aplicado: ${lat.toFixed(5)}, ${lng.toFixed(5)}`, 'ok');
-    showActiveLocation(lat, lng);
+    showActiveLocation(lat, lng, d.keep_alive !== false);
   } catch (e) {
     toast(`❌ ${e.message}`, 'err');
   } finally {
     setBusy(false);
+  }
+}
+
+async function toggleKeepAlive(enabled) {
+  pendingKeepAliveToggle = true;
+  try {
+    const r = await fetch('/api/keep-alive', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ keep_alive: enabled }),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || 'Erro ao atualizar keep-alive');
+    updateKeepAliveBadge(d.keep_alive !== false);
+    toast(
+      d.keep_alive
+        ? '🔄 Reenvio automático a cada 2s ativado'
+        : '⏸️ Reenvio automático pausado',
+      'info'
+    );
+  } catch (e) {
+    document.getElementById('keep-alive-toggle').checked = !enabled;
+    toast(`❌ ${e.message}`, 'err');
+  } finally {
+    pendingKeepAliveToggle = false;
   }
 }
 
@@ -612,8 +662,13 @@ async function pollStatus() {
     const d = await r.json();
     updateStatusUI(d);
 
+    const keepAlive = d.keep_alive !== false;
+    if (!pendingKeepAliveToggle) {
+      document.getElementById('keep-alive-toggle').checked = keepAlive;
+    }
+
     if (d.current_lat != null && d.current_lng != null) {
-      showActiveLocation(d.current_lat, d.current_lng);
+      showActiveLocation(d.current_lat, d.current_lng, keepAlive, d.refresh_interval);
     } else {
       hideActiveLocation();
     }
@@ -648,9 +703,17 @@ function updateStatusUI(d) {
   document.getElementById('btn-clear').disabled = !canAct;
 }
 
-function showActiveLocation(lat, lng) {
+function updateKeepAliveBadge(keepAlive, intervalSec = 2) {
+  const badge = document.getElementById('active-keepalive');
+  badge.textContent = keepAlive
+    ? `🔄 Reenviando a cada ${intervalSec}s para manter o GPS ativo`
+    : '⏸️ Reenvio automático pausado';
+}
+
+function showActiveLocation(lat, lng, keepAlive = true, intervalSec = 2) {
   const el = document.getElementById('active-location');
   document.getElementById('active-coords').textContent = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+  updateKeepAliveBadge(keepAlive, intervalSec);
   el.classList.add('show');
 }
 function hideActiveLocation() {

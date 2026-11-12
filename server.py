@@ -71,6 +71,8 @@ class LocationManager:
         self.status_msg: str = "Aguardando dispositivo..."
         self.current_lat: Optional[float] = None
         self.current_lng: Optional[float] = None
+        self.keep_alive: bool = True
+        self.refresh_interval: float = max(0.5, float(os.environ.get("GPS_REFRESH_INTERVAL", "2.0")))
 
     async def detect_simulator(self) -> Optional[tuple[str, str]]:
         """Verifica se há um Simulador do Xcode aberto no macOS (status Booted)."""
@@ -107,10 +109,11 @@ class LocationManager:
             devices = await select_devices_by_connection_type(connection_type="USB")
             if devices:
                 device = devices[0]
+                was_simulator = self.is_simulator
                 self.is_simulator = False
                 self.serial = device.serial
 
-                if self.status == "disconnected" or not self.ios_version or self.is_simulator:
+                if self.status == "disconnected" or not self.ios_version or was_simulator:
                     try:
                         ld = await create_using_usbmux(serial=self.serial)
                         raw_type = getattr(ld, "product_type", "iPhone")
@@ -204,48 +207,74 @@ class LocationManager:
             self.status_msg = f"Erro ao iniciar sessão DVT: {e}"
             raise
 
-    async def set_location(self, lat: float, lng: float):
+    async def _send_location_unlocked(self, lat: float, lng: float):
+        """Envia a coordenada para o Simulador ou iPhone USB (deve ser chamado sob self.lock)."""
+        await self.ensure_connected()
+
+        if self.is_simulator:
+            target = self.serial if self.serial else "booted"
+            coords = f"{lat:.6f},{lng:.6f}"
+            proc = await asyncio.create_subprocess_exec(
+                "xcrun", "simctl", "location", target, "set", coords,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            _, stderr = await proc.communicate()
+            if proc.returncode != 0:
+                err_msg = stderr.decode("utf-8", errors="replace").strip()
+                raise RuntimeError(f"Falha no xcrun simctl: {err_msg}")
+        else:
+            await self.loc_sim.set(lat, lng)
+
+        self.current_lat = lat
+        self.current_lng = lng
+        self.status = "simulating"
+        self.status_msg = f"GPS Simulado: {lat:.5f}, {lng:.5f}"
+
+    async def set_location(self, lat: float, lng: float, keep_alive: Optional[bool] = None):
         """Aplica a coordenada no iPhone físico ou no Simulador do Xcode."""
         async with self.lock:
+            if keep_alive is not None:
+                self.keep_alive = keep_alive
             try:
-                await self.ensure_connected()
-
-                # Simulador do Xcode no macOS
-                if self.is_simulator:
-                    log.info("Enviando coordenadas para o Simulador iOS: %.6f, %.6f", lat, lng)
-                    target = self.serial if self.serial else "booted"
-                    coords = f"{lat:.6f},{lng:.6f}"
-                    proc = await asyncio.create_subprocess_exec(
-                        "xcrun", "simctl", "location", target, "set", coords,
-                        stdout=asyncio.subprocess.PIPE,
-                        stderr=asyncio.subprocess.PIPE,
-                    )
-                    stdout, stderr = await proc.communicate()
-                    if proc.returncode != 0:
-                        err_msg = stderr.decode("utf-8", errors="replace").strip()
-                        raise RuntimeError(f"Falha no xcrun simctl: {err_msg}")
-
-                    self.current_lat = lat
-                    self.current_lng = lng
-                    self.status = "simulating"
-                    self.status_msg = f"GPS Simulado: {lat:.5f}, {lng:.5f}"
-                    log.info("Localização do Simulador fixada com sucesso!")
-                    return
-
-                # iPhone físico USB
-                log.info("Enviando coordenadas para o iPhone USB: %.6f, %.6f", lat, lng)
-                await self.loc_sim.set(lat, lng)
-
-                self.current_lat = lat
-                self.current_lng = lng
-                self.status = "simulating"
-                self.status_msg = f"GPS Simulado: {lat:.5f}, {lng:.5f}"
+                alvo = "Simulador iOS" if self.is_simulator else "iPhone USB"
+                log.info("Enviando coordenadas para %s: %.6f, %.6f", alvo, lat, lng)
+                await self._send_location_unlocked(lat, lng)
                 log.info("Localização fixada com sucesso!")
             except Exception as e:
                 log.exception("Erro ao aplicar localização")
                 if not self.is_simulator:
                     await self._reset_internal(clean=False)
                 raise RuntimeError(f"Falha ao enviar coordenada: {e}")
+
+    async def refresh_location(self):
+        """Reenvia periodicamente a localização ativa para evitar expiração no iOS."""
+        async with self.lock:
+            if (
+                not self.keep_alive
+                or self.status != "simulating"
+                or self.current_lat is None
+                or self.current_lng is None
+            ):
+                return
+
+            try:
+                await self._send_location_unlocked(self.current_lat, self.current_lng)
+                log.debug(
+                    "GPS reenviado (keep-alive): %.6f, %.6f",
+                    self.current_lat,
+                    self.current_lng,
+                )
+            except Exception as e:
+                log.warning("Falha ao reenviar GPS (keep-alive): %s", e)
+                if not self.is_simulator:
+                    await self._reset_internal(clean=False)
+
+    async def set_keep_alive(self, enabled: bool):
+        """Atualiza o estado de reenvio automático sem limpar as coordenadas."""
+        async with self.lock:
+            self.keep_alive = enabled
+            log.info("Reenvio automático de GPS (keep-alive): %s", "ativado" if enabled else "desativado")
 
     async def clear_location(self):
         """Restaura o GPS real do aparelho ou limpa o simulador."""
@@ -323,6 +352,16 @@ async def background_monitor():
         await asyncio.sleep(2.5)
 
 
+async def location_heartbeat():
+    """Reenvia periodicamente o GPS simulado para manter o timestamp atualizado no iOS."""
+    while True:
+        await asyncio.sleep(manager.refresh_interval)
+        try:
+            await manager.refresh_location()
+        except Exception as e:
+            log.debug("Location heartbeat exception: %s", e)
+
+
 def get_resource_path(relative_path: str) -> Path:
     """Retorna o caminho do arquivo, compatível com PyInstaller (.exe) e execução normal."""
     if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
@@ -335,6 +374,7 @@ def get_resource_path(relative_path: str) -> Path:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     monitor_task = asyncio.create_task(background_monitor())
+    heartbeat_task = asyncio.create_task(location_heartbeat())
 
     # Se executado como .exe compilado (PyInstaller), abre o navegador automaticamente
     if getattr(sys, "frozen", False):
@@ -346,6 +386,7 @@ async def lifespan(app: FastAPI):
 
     yield
     monitor_task.cancel()
+    heartbeat_task.cancel()
     await manager.disconnect()
 
 
@@ -355,6 +396,11 @@ app = FastAPI(title="FakeGPS iPhone", lifespan=lifespan)
 class LocationRequest(BaseModel):
     lat: float
     lng: float
+    keep_alive: bool = True
+
+
+class KeepAliveRequest(BaseModel):
+    keep_alive: bool
 
 
 @app.get("/api/status")
@@ -367,6 +413,8 @@ async def api_status():
         "is_simulator": manager.is_simulator,
         "current_lat": manager.current_lat,
         "current_lng": manager.current_lng,
+        "keep_alive": manager.keep_alive,
+        "refresh_interval": manager.refresh_interval,
     }
 
 
@@ -376,10 +424,16 @@ async def api_set_location(req: LocationRequest):
         raise HTTPException(status_code=400, detail="Coordenadas fora do intervalo válido.")
 
     try:
-        await manager.set_location(req.lat, req.lng)
-        return {"ok": True, "lat": req.lat, "lng": req.lng}
+        await manager.set_location(req.lat, req.lng, keep_alive=req.keep_alive)
+        return {"ok": True, "lat": req.lat, "lng": req.lng, "keep_alive": manager.keep_alive}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/keep-alive")
+async def api_set_keep_alive(req: KeepAliveRequest):
+    await manager.set_keep_alive(req.keep_alive)
+    return {"ok": True, "keep_alive": manager.keep_alive}
 
 
 @app.delete("/api/location")
